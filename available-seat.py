@@ -38,7 +38,10 @@ TARGET_THEATER = "용산아이파크몰"
 TARGET_DAY_OF_WEEK = "토"
 TARGET_DAY_NUMBER = "21"
 WATCH_START_TIMES = ["13:20", "16:30"]
-TARGET_SEAT = "P44"
+TARGET_ROW_START = "F"
+TARGET_ROW_END = "O"
+TARGET_COL_MIN = 10
+TARGET_COL_MAX = 35
 POLL_INTERVAL_SEC = 1.0
 LOGIN_POPUP_WAIT_SEC = 2
 TELEGRAM_CHAT_ID = -1003872445177
@@ -458,22 +461,27 @@ def _extract_seat_name(seat_button) -> str:
     return ""
 
 
-def is_seat_available(seat_name: str) -> bool:
+def _build_target_seat_set() -> set[str]:
+    seats: set[str] = set()
+    for row_ord in range(ord(TARGET_ROW_START), ord(TARGET_ROW_END) + 1):
+        row = chr(row_ord)
+        for col in range(TARGET_COL_MIN, TARGET_COL_MAX + 1):
+            seats.add(f"{row}{col}")
+    return seats
+
+
+def find_available_target_seats() -> list[str]:
     driver, wait = _ctx()
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button[data-seatlocno]")))
-
-    xpath = f"//button[@data-seatlocno and .//span[normalize-space()='{seat_name}']]"
-    candidates = driver.find_elements(By.XPATH, xpath)
-    for btn in candidates:
-        if btn.get_attribute("disabled") is None:
-            return True
-
+    target_set = _build_target_seat_set()
+    found: set[str] = set()
     for btn in driver.find_elements(By.CSS_SELECTOR, "button[data-seatlocno]"):
         if btn.get_attribute("disabled") is not None:
             continue
-        if _extract_seat_name(btn) == seat_name:
-            return True
-    return False
+        seat_name = _extract_seat_name(btn)
+        if seat_name in target_set:
+            found.add(seat_name)
+    return sorted(found, key=lambda s: (s[0], int(s[1:])))
 
 
 def _run_coro_safely(coro) -> None:
@@ -663,12 +671,20 @@ def main() -> int:
                     logging.info("[seat_loop] 시도 %d, 시간대 %s", seat_attempt, start_time)
                     click_time_slot(start_time)
 
-                    if is_seat_available(TARGET_SEAT):
-                        logging.info("[seat] %s 좌석 예매 가능", TARGET_SEAT)
-                        notify(driver=DRIVER, start_time=start_time, seat_names=[TARGET_SEAT])
+                    available_seats = find_available_target_seats()
+                    if available_seats:
+                        logging.info("[seat] 후보 좌석 발견: %s", ", ".join(available_seats))
+                        notify(driver=DRIVER, start_time=start_time, seat_names=available_seats)
                         return 0
 
-                    logging.info("[seat] %s 좌석 없음 (시간대 %s)", TARGET_SEAT, start_time)
+                    logging.info(
+                        "[seat] 후보 좌석 없음 (범위 %s~%s, %d~%d / 시간대 %s)",
+                        TARGET_ROW_START,
+                        TARGET_ROW_END,
+                        TARGET_COL_MIN,
+                        TARGET_COL_MAX,
+                        start_time,
+                    )
                 time.sleep(POLL_INTERVAL_SEC)
 
             except (TimeoutException, NoSuchElementException, StaleElementReferenceException) as exc:

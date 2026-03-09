@@ -33,7 +33,7 @@ except Exception:
 
 START_URL = "https://cgv.co.kr/tme/itgrSrch"
 SEARCH_KEYWORD = "프로젝트 헤일메리"
-TARGET_THEATER = "용산"
+TARGET_THEATER = "용산아이파크몰"
 TELEGRAM_CHAT_ID = -1003872445177
 
 DRIVER: Optional[webdriver.Chrome] = None
@@ -51,7 +51,7 @@ def configure_logging() -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="CGV 예매 + 극장 목록 용산 체크")
+    parser = argparse.ArgumentParser(description="CGV 예매 + 극장 목록 용산아이파크몰 체크")
     parser.add_argument("--headless", action="store_true", help="헤드리스 모드")
     parser.add_argument("--timeout", type=int, default=10, help="요소 대기 시간(초)")
     parser.add_argument(
@@ -368,9 +368,9 @@ def _build_notify_text(driver=None, extra=None) -> str:
         current_url = ""
 
     lines = [
-        "CGV 알림 - 용산 발견",
+        f"CGV 알림 - {TARGET_THEATER} 발견",
         f"영화명: {SEARCH_KEYWORD}",
-        "발견 사실: 극장 목록에 '용산'이 존재합니다.",
+        f"발견 사실: 극장 목록에 '{TARGET_THEATER}'이(가) 존재합니다.",
         f"발생 시각(Asia/Seoul): {now_kr}",
     ]
     if current_url:
