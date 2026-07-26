@@ -1,0 +1,35 @@
+# 감시 선언 파일. 이 파일(targets.example.yaml)을 targets.yaml 로 복사해 사용.
+# 코드 수정 없이 이 파일만 바꾸면 어떤 영화/날짜/극장/상영관이든 감시 가능.
+#
+#   cp targets.example.yaml targets.yaml
+#
+# 비밀값(텔레그램 토큰)은 여기 두지 말고 .env 에 둘 것.
+
+defaults:
+  site_no: "0013"                 # 용산아이파크몰 (극장코드)
+  site_name: 용산아이파크몰
+  proxy: socks5://127.0.0.1:40000  # 서버(데이터센터 IP)면 WARP 프록시. 집/노트북이면 "" 로
+  poll_sec: 1.0                    # seat 폴링 주기
+  open_poll_sec: 30.0              # open 평상시 폴링
+  fast_poll_sec: 1.0               # open 가속 폴링(오픈 예상시각 근처)
+  heartbeat_sec: 3600
+
+targets:
+  # (1) 빈자리 감시 — 이미 열린 회차의 명당 취소표
+  - name: spiderman-0801-imax-seat
+    mode: seat
+    movie: "스파이더맨-브랜드 뉴 데이"
+    date: "20260801"
+    screen: "IMAX"                 # 상영관 키워드 (생략 시 전 상영관)
+    start: "16"                    # 시작시 접두 (생략 가능)
+    seat: { row: [F, O], col: [10, 35] }
+
+  # (2) 예매 오픈 감시 — 아직 안 열린 날짜
+  - name: spiderman-0808-imax-open
+    mode: open
+    movie: "스파이더맨-브랜드 뉴 데이"
+    date: "20260808"
+    screen: "IMAX"                 # "IMAX관이 열리면" (생략 시 그 날짜 아무거나 열리면)
+    # expected_open: "20260802 20:00"   # 공지된 오픈 시각 알면 지정 → 그 근처 1초 가속
+    on_open: seat                  # 오픈되면 자동으로 좌석 감시로 승계
+    seat: { row: [F, O], col: [10, 35] }

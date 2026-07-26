@@ -27,6 +27,9 @@ htmlcov/
 .env.*
 !.env.example
 
+# Personal watch config (개인 감시 선언 — 서버에서 직접 생성)
+targets.yaml
+
 # IDE / OS
 .vscode/
 .idea/
