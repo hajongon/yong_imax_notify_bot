@@ -1,0 +1,27 @@
+# systemd 서비스 유닛 (OCI/Linux 서버용)
+# 설치:
+#   sudo cp cgv-seat-watch.service /etc/systemd/system/
+#   (아래 User / WorkingDirectory / ExecStart 경로를 본인 환경에 맞게 수정)
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cgv-seat-watch
+# 로그:   journalctl -u cgv-seat-watch -f
+# 중지:   sudo systemctl stop cgv-seat-watch
+
+[Unit]
+Description=CGV seat availability watcher (API, no Selenium)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opc
+WorkingDirectory=/home/opc/yong_imax_notify_bot/api_watcher
+EnvironmentFile=/home/opc/yong_imax_notify_bot/api_watcher/.env
+ExecStart=/usr/bin/python3 /home/opc/yong_imax_notify_bot/api_watcher/cgv_seat_watch.py
+# 상영 시각이 지나 정상 종료(exit 0)하면 재시작하지 않음.
+# 네트워크/드라이버 크래시 등 비정상 종료(exit!=0)일 때만 자동 재시작.
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
