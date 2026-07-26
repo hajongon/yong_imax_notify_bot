@@ -141,6 +141,8 @@ class SeatWatcher(BaseWatcher):
         if sh is None:
             return
         show_dt = parse_show_dt(t.date, sh["scnsrtTm"])
+        log.info("[%s] seat 감시 루프 시작 · %s · 잔여 %s/%s",
+                 t.name, self.target_label(), sh.get("frSeatCnt"), sh.get("stcnt"))
         if startup_notify:
             self.notify(f"✅ [{t.name}] 좌석 감시 시작\n{self.target_label()}\n"
                         f"현재 잔여 {sh.get('frSeatCnt')}/{sh.get('stcnt')}석\n{now_kst_str()}")
@@ -226,6 +228,8 @@ class OpenWatcher(BaseWatcher):
         if self.stopped():
             return
         t = self.t
+        log.info("[%s] open 감시 루프 시작 · %s %s %s · poll %ss",
+                 t.name, t.site_name, t.date, t.screen or "전체", t.open_poll_sec)
         self.notify(f"✅ [{t.name}] 예매 오픈 감시 시작\n"
                     f"대상: {t.site_name} {t.date} {t.screen or '전체'} ({self.mov_nm})\n"
                     f"{'오픈예상 ' + t.expected_open if t.expected_open else '오픈시각 미상 → 상시 감시'}\n{now_kst_str()}")
