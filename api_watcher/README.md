@@ -60,6 +60,27 @@ journalctl -u cgv-seat-watch -f
 
 코드 업데이트 시: `git pull` 후 `sudo systemctl restart cgv-seat-watch`
 
+## Cloudflare 데이터센터 IP 차단 (중요)
+
+클라우드 서버(OCI 등)의 데이터센터 IP는 TLS 지문을 위장해도 Cloudflare가 **IP 자체로 차단**(정적 403)합니다.
+가정용 IP(집/노트북)는 통과하지만 서버는 막힙니다. 해결책은 **Cloudflare WARP 프록시 모드**로
+이그레스를 Cloudflare 네트워크로 우회하는 것입니다(무료, 라우팅 안 건드려 SSH 안전).
+
+```bash
+# WARP 설치
+curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+sudo apt update && sudo apt install -y cloudflare-warp
+
+# 등록 -> 프록시 모드(연결 전에 설정) -> 연결
+warp-cli --accept-tos registration new
+warp-cli --accept-tos mode proxy
+warp-cli --accept-tos connect
+warp-cli --accept-tos status          # Connected 확인, SOCKS5 = 127.0.0.1:40000
+```
+
+그 후 `.env`에 `CGV_PROXY=socks5://127.0.0.1:40000` 설정. (텔레그램 발송은 프록시를 타지 않음)
+
 ## 설정 (환경변수 / .env)
 
 전체 항목과 기본값은 [`.env.example`](.env.example) 참고. 주요 항목:

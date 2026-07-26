@@ -64,6 +64,9 @@ class Config:
         self.renotify_sec = float(_env("CGV_RENOTIFY_SEC", "300")) # 타겟 잔존 시 재알림 간격
         self.heartbeat_sec = float(_env("CGV_HEARTBEAT_SEC", "3600"))
         self.fail_alert_after = int(_env("CGV_FAIL_ALERT", "20"))  # 연속 실패 N회 시 경고
+        # --- 네트워크 ---
+        # Cloudflare가 데이터센터 IP를 차단하는 경우 프록시로 우회(예: WARP socks5://127.0.0.1:40000)
+        self.proxy = _env("CGV_PROXY", "")
         # --- 텔레그램 ---
         self.tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         self.tg_chat = _env("TELEGRAM_CHAT_ID", "-1003872445177")
@@ -72,7 +75,7 @@ class Config:
         return (f"{self.movie_keyword} / {self.site_name} / {self.scn_ymd} "
                 f"{self.start_hhmm}시 {self.screen_kw} / "
                 f"좌석 {self.row_lo}~{self.row_hi}·{self.col_lo}~{self.col_hi} / "
-                f"폴링 {self.poll_interval}s")
+                f"폴링 {self.poll_interval}s" + (" / proxy" if self.proxy else ""))
 
 
 # =========================================================================
@@ -89,12 +92,14 @@ class CgvError(Exception):
 
 
 class CgvClient:
-    def __init__(self, timeout: float = 15.0):
+    def __init__(self, timeout: float = 15.0, proxy: str = ""):
         self.timeout = timeout
+        self.proxies = {"http": proxy, "https": proxy} if proxy else None
         self._new_session()
 
     def _new_session(self):
-        self.s = requests.Session(impersonate=IMPERSONATE, timeout=self.timeout)
+        self.s = requests.Session(impersonate=IMPERSONATE, timeout=self.timeout,
+                                  proxies=self.proxies)
 
     def _get(self, path: str, params: dict, tries: int = 3) -> dict:
         last = None
@@ -195,7 +200,7 @@ def send_telegram(cfg: Config, text: str) -> bool:
 class Watcher:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.cli = CgvClient()
+        self.cli = CgvClient(proxy=cfg.proxy)
         self.stop = False
         # 상영 식별자(최초 1회 확정, 이후 스케줄에서 재확인)
         self.mov_no = None
