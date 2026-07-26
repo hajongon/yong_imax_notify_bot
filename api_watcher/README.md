@@ -35,26 +35,33 @@ python3 cgv_seat_watch.py            # 24시간 감시 시작 (Ctrl+C 종료)
 
 ## 서버 배포 (OCI, git pull 방식)
 
-서버에서:
+서버에서 (Ubuntu 24.04 기준):
 
 ```bash
 # 1) 코드 받기
 git clone https://github.com/hajongon/yong_imax_notify_bot.git
 cd yong_imax_notify_bot/api_watcher
 
-# 2) 의존성
-python3 -m pip install -r requirements.txt
+# 2) 가상환경 + 의존성 (Ubuntu 24.04는 PEP 668 때문에 venv 필수)
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 
-# 3) 설정 (.env 는 서버에서 직접 생성 — git 에 올라가지 않음)
+# 3) Cloudflare WARP 프록시 (데이터센터 IP 차단 우회 — 위 "Cloudflare" 섹션 참고)
+#    설치 후 warp-cli mode proxy / connect 까지 완료해 둘 것
+
+# 4) 설정 (.env 는 서버에서 직접 생성 — git 에 올라가지 않음)
 cp .env.example .env
-nano .env        # TELEGRAM_BOT_TOKEN, 감시 대상/좌석범위 확인
+nano .env        # TELEGRAM_BOT_TOKEN 입력, CGV_PROXY=socks5://127.0.0.1:40000
 
-# 4) systemd 등록 (유닛 파일의 User/경로를 본인 환경에 맞게 수정)
+# 5) 먼저 한 번 점검
+.venv/bin/python cgv_seat_watch.py --once
+
+# 6) systemd 등록 (유닛 파일의 User/경로가 본인 환경과 맞는지 확인)
 sudo cp cgv-seat-watch.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now cgv-seat-watch
 
-# 5) 로그 확인
+# 7) 로그 확인
 journalctl -u cgv-seat-watch -f
 ```
 
