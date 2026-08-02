@@ -30,6 +30,9 @@ htmlcov/
 # Personal watch config (개인 감시 선언 — 서버에서 직접 생성)
 targets.yaml
 
+# Runtime observation data (정찰 관측 이력 — 서버에서 축적)
+api_watcher/data/
+
 # IDE / OS
 .vscode/
 .idea/

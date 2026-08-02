@@ -1,0 +1,22 @@
+# 지평선 정찰기 (oneshot) — cgv-scout.timer 가 주기적으로 실행한다.
+#
+# 감시 서비스(cgv-watch)와 완전히 독립. 이게 실패해도 알림 감시에는 영향이 없다.
+#
+# 설치:
+#   sudo cp cgv-scout.service cgv-scout.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cgv-scout.timer
+# 확인: systemctl list-timers cgv-scout.timer
+# 로그: journalctl -u cgv-scout.service -f
+
+[Unit]
+Description=CGV booking-horizon scout (records bookable-date history)
+After=network-online.target warp-svc.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/yong_imax_notify_bot/api_watcher
+EnvironmentFile=/home/ubuntu/yong_imax_notify_bot/api_watcher/.env
+ExecStart=/home/ubuntu/yong_imax_notify_bot/api_watcher/.venv/bin/python /home/ubuntu/yong_imax_notify_bot/api_watcher/scout.py

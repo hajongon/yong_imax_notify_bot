@@ -1,0 +1,17 @@
+# 정찰 주기 타이머.
+#
+# 5분 간격인 이유: 지평선이 늘어난 '시각'을 ±5분으로 특정하기 위함.
+# 오픈 시각을 알면 다음 오픈도 그 시각에 일어날 것으로 예측할 수 있다.
+# 부하는 무시할 수준(관측 8개 × 5분마다 ≈ 0.03 rps).
+
+[Unit]
+Description=Run CGV horizon scout every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
