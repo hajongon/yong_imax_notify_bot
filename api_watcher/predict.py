@@ -70,19 +70,42 @@ def fmt(d: date) -> str:
 
 # ------------------------------------------------------- 지평선 증가 이벤트 추출
 def extract_events(obs: list[dict]) -> list[dict]:
-    """지평선(max)이 커진 순간들. 실제 발생은 (이전관측, 현재관측] 사이 어딘가."""
+    """지평선이 커진 순간들. 실제 발생은 (이전관측, 현재관측] 사이 어딘가.
+
+    ⚠️ 지평선은 단조증가가 아니다 — 실측(2026-08-04 여의도 오디세이)에서 8/8↔8/7 왕복이
+    관측됐다(스케줄이 실시간 편집되는 중으로 추정). 원시값으로 상승만 세면 같은 확장이
+    여러 번 계수되어 주기 추정이 오염된다. 따라서 **누적최대(running max)** 기준으로
+    이벤트를 뽑고, 하락(flicker)은 별도로 세어 데이터 품질 지표로만 쓴다.
+    """
     events = []
+    run_max = obs[0]["max"]
+    prev_t = obs[0]["_t"]
     for prev, cur in zip(obs, obs[1:]):
-        if cur["max"] > prev["max"]:
+        if cur["max"] > run_max:
             events.append({
                 "after": cur["_t"],          # 이 시각엔 이미 늘어나 있었음
-                "before": prev["_t"],        # 이 시각엔 아직 아니었음
-                "from": prev["max"],
+                "before": prev_t,            # 이 시각엔 아직 아니었음
+                "from": run_max,
                 "to": cur["max"],
-                "gain_days": (ymd2date(cur["max"]) - ymd2date(prev["max"])).days,
-                "uncertainty_sec": (cur["_t"] - prev["_t"]).total_seconds(),
+                "gain_days": (ymd2date(cur["max"]) - ymd2date(run_max)).days,
+                "uncertainty_sec": (cur["_t"] - prev_t).total_seconds(),
             })
+            run_max = cur["max"]
+            prev_t = cur["_t"]
+        elif cur["max"] >= run_max:
+            prev_t = cur["_t"]
     return events
+
+
+def count_flicker(obs: list[dict]) -> int:
+    """지평선이 뒤로 후퇴한 횟수(비단조성 지표)."""
+    return sum(1 for a, b in zip(obs, obs[1:]) if b["max"] < a["max"])
+
+
+def static_hours(obs: list[dict], events: list[dict]) -> float:
+    """마지막 지평선 증가 이후 경과 시간(증가가 없으면 전체 관측 기간)."""
+    last = events[-1]["after"] if events else obs[0]["_t"]
+    return (obs[-1]["_t"] - last).total_seconds() / 3600
 
 
 def infer(events: list[dict]) -> dict:
@@ -120,7 +143,8 @@ def next_wednesdays(today: date, n: int = 4) -> list[date]:
     return [d + timedelta(days=7 * i) for i in range(n)]
 
 
-def structural_prediction(current_max: date, target: date, today: date) -> dict:
+def structural_prediction(current_max: date, target: date, today: date,
+                          static_h: float = 0.0) -> dict:
     """관측이 부족할 때의 대체 예측 — 편성주(수→화) 구조 기반.
 
     관측된 구조적 사실:
@@ -142,9 +166,12 @@ def structural_prediction(current_max: date, target: date, today: date) -> dict:
     if b1 is not None:
         idx = weds.index(b1)
         b2 = weds[idx + 1] if idx + 1 < len(weds) else b1 + timedelta(days=7)
+    # 관측으로 가설A(매일 롤링) 반증: 하루 넘게 지평선이 그대로면 매일 오르는 게 아니다.
+    daily_refuted = static_h >= 30
     return {"daily_hypothesis": a, "weekly_hypothesis": b1,
             "weekly_delayed": b2, "need_days": need,
-            "upcoming_wednesdays": weds[:3]}
+            "upcoming_wednesdays": weds[:3],
+            "daily_refuted": daily_refuted, "static_hours": round(static_h, 1)}
 
 
 # ------------------------------------------------------------------- 예측
@@ -158,18 +185,20 @@ def predict(series, movie: str, site: str, target_ymd: str, now: datetime) -> di
         return {"error": f"관측 이력 없음: {movie}@{site}"}
 
     obs = series[key]
-    cur_max = ymd2date(obs[-1]["max"])
+    cur_max = ymd2date(max(o["max"] for o in obs))   # 누적최대(flicker 무시)
     target = ymd2date(target_ymd)
     today = now.date()
     events = extract_events(obs)
     inf = infer(events)
+    stat_h = static_hours(obs, events)
 
     res = {
         "movie": key[0], "site": site, "target": target_ymd,
         "observations": len(obs),
         "span_hours": (obs[-1]["_t"] - obs[0]["_t"]).total_seconds() / 3600,
-        "current_max": obs[-1]["max"],
+        "current_max": cur_max.strftime("%Y%m%d"),
         "already_open": target <= cur_max,
+        "flicker": count_flicker(obs), "static_hours": round(stat_h, 1),
         "events": events, "inference": inf,
     }
     if res["already_open"]:
@@ -191,8 +220,12 @@ def predict(series, movie: str, site: str, target_ymd: str, now: datetime) -> di
                          f"→ {n_ev}회 필요")
         res["confidence"] = inf["confidence"]
     else:
-        st = structural_prediction(cur_max, target, today)
-        res["structural"] = {k: (v.isoformat() if isinstance(v, date) else v) for k, v in st.items()}
+        st = structural_prediction(cur_max, target, today, stat_h)
+        res["structural"] = {
+            k: (v.isoformat() if isinstance(v, date) else
+                [x.isoformat() for x in v] if isinstance(v, list) else v)
+            for k, v in st.items()
+        }
         res["predicted_open"] = None
         res["method"] = "구조모델(관측 부족)"
         res["confidence"] = "low"
@@ -202,18 +235,20 @@ def predict(series, movie: str, site: str, target_ymd: str, now: datetime) -> di
 # ------------------------------------------------------------------- 출력
 def report(series, now: datetime):
     print(f"■ 관측 이력 요약  (현재 {now.strftime('%Y-%m-%d %H:%M')} KST)\n")
-    print(f"{'영화@극장':34} {'관측':>4} {'기간(h)':>7} {'현재지평선':>12} {'증가이벤트':>10}")
-    print("-" * 76)
+    print(f"{'영화@극장':34} {'관측':>4} {'기간h':>6} {'현재지평선':>12} {'증가':>4} {'정체h':>6} {'후퇴':>4}")
+    print("-" * 82)
     for (m, s), obs in sorted(series.items()):
         ev = extract_events(obs)
         span = (obs[-1]["_t"] - obs[0]["_t"]).total_seconds() / 3600
-        mx = ymd2date(obs[-1]["max"])
-        print(f"{(m[:22]+'@'+s):34} {len(obs):>4} {span:>7.1f} "
-              f"{obs[-1]['max']+' '+fmt(mx)[-3:]:>12} {len(ev):>10}")
+        cm = max(o["max"] for o in obs)
+        mx = ymd2date(cm)
+        print(f"{(m[:22]+'@'+s):34} {len(obs):>4} {span:>6.1f} "
+              f"{cm+' '+fmt(mx)[-3:]:>12} {len(ev):>4} "
+              f"{static_hours(obs, ev):>6.1f} {count_flicker(obs):>4}")
         for e in ev:
             print(f"      └ {e['before'].strftime('%m/%d %H:%M')}~{e['after'].strftime('%H:%M')} "
                   f"{e['from']}→{e['to']} (+{e['gain_days']}일, ±{e['uncertainty_sec']/60:.0f}분)")
-    print("-" * 76)
+    print("-" * 82)
 
 
 def show(res: dict, now: datetime):
@@ -238,17 +273,21 @@ def show(res: dict, now: datetime):
         a = date.fromisoformat(st["daily_hypothesis"])
         b1 = date.fromisoformat(st["weekly_hypothesis"]) if st.get("weekly_hypothesis") else None
         b2 = date.fromisoformat(st["weekly_delayed"]) if st.get("weekly_delayed") else None
-        print("  ⏳ 관측 이벤트 부족 → 구조모델 예측 (신뢰도 low)")
-        print(f"     가설A 매일 +1일 롤링        : {fmt(a)} 경")
+        refuted = st.get("daily_refuted")
+        print("  ⏳ 관측된 지평선 증가 없음 → 구조모델 예측 (신뢰도 low)")
+        mark = "  ❌반증됨" if refuted else ""
+        print(f"     가설A 매일 +1일 롤링        : {fmt(a)} 경{mark}")
+        if refuted:
+            print(f"        └ 지평선이 {st['static_hours']:.0f}시간째 그대로 → 매일 오르는 방식이 아님")
         if b1:
-            print(f"     가설B1 주간 점프(리드 유지)  : {fmt(b1)} 경  ← 편성주 시작(수)")
+            print(f"     가설B1 배치 점프(다음 편성주): {fmt(b1)} 경  ← 수요일")
         if b2:
-            print(f"     가설B2 주간 점프(리드 -1주) : {fmt(b2)} 경")
-        cands = [d for d in (a, b1, b2) if d]
-        print(f"     → 유력 구간: {fmt(min(cands))} ~ {fmt(max(cands))}")
-        print("     ※ 판별법: 지평선이 '매일 조금씩' 오르는지 '수요일에 한꺼번에' 오르는지.")
-        print(f"       다음 수요일({fmt(st['upcoming_wednesdays'][0] if isinstance(st['upcoming_wednesdays'][0], date) else date.fromisoformat(st['upcoming_wednesdays'][0]))})"
-              " 전후 관측이 결정적.")
+            print(f"     가설B2 배치 점프(한 주 뒤)  : {fmt(b2)} 경")
+        cands = [d for d in ([] if refuted else [a]) + [b1, b2] if d]
+        if cands:
+            print(f"     → 유력 구간: {fmt(min(cands))} ~ {fmt(max(cands))}")
+        if res.get("flicker"):
+            print(f"     ⚠️ 지평선 후퇴 {res['flicker']}회 관측(비단조) — 누적최대 기준으로 계산함")
 
 
 def main() -> int:
