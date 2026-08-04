@@ -60,6 +60,30 @@ def load(path: str = HIST) -> dict[tuple[str, str], list[dict]]:
     return series
 
 
+def load_wall(path: str | None = None) -> list[dict]:
+    """벽(전국 공통 예매 상한) 시계열. scout.py 가 data/wall.jsonl 에 기록."""
+    path = path or os.path.join(HERE, "data", "wall.jsonl")
+    out = []
+    if not os.path.exists(path):
+        return out
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if not r.get("wall"):
+                continue
+            r["_t"] = datetime.fromisoformat(r["ts"])
+            r["max"] = r["wall"]          # extract_events 재사용을 위해 키 통일
+            out.append(r)
+    out.sort(key=lambda x: x["_t"])
+    return out
+
+
 def ymd2date(s: str) -> date:
     return datetime.strptime(s, "%Y%m%d").date()
 
@@ -290,6 +314,48 @@ def show(res: dict, now: datetime):
             print(f"     ⚠️ 지평선 후퇴 {res['flicker']}회 관측(비단조) — 누적최대 기준으로 계산함")
 
 
+def wall_report(now: datetime, target_ymd: str) -> None:
+    """벽 모델 리포트 — 이게 목표 예측의 핵심이다.
+
+    전국 어느 극장도 벽을 넘는 정규 회차를 갖지 못한다(2026-08-04 174개 극장 전수 확인).
+    용산은 이미 벽에 붙어 있으므로, **벽이 목표일을 넘어 밀리는 순간** 목표일이 열린다.
+    """
+    w = load_wall()
+    print("\n■ 벽(전국 공통 예매 상한) 모델")
+    if not w:
+        print("   (data/wall.jsonl 없음 — 새 scout.py 가 아직 안 돌았음)")
+        return
+    ev = extract_events(w)
+    cur = max(x["wall"] for x in w)
+    span = (w[-1]["_t"] - w[0]["_t"]).total_seconds() / 3600
+    tgt = ymd2date(target_ymd)
+    print(f"   현재 벽: {cur} {fmt(ymd2date(cur))}   "
+          f"(관측 {len(w)}회 / {span:.1f}시간, 이동 {len(ev)}회)")
+    print(f"   벽에 붙은 극장: {w[-1].get('at_wall_count')}/{w[-1].get('sites_polled')}곳")
+    print(f"   목표 {target_ymd} {'✅ 이미 열림' if w[-1].get('target_open') else '아직 미개방'}"
+          f"  (목표극장 지평선 {w[-1].get('target_site_max')})")
+    for e in ev:
+        print(f"      ▲ {e['before'].strftime('%m/%d %H:%M')}~{e['after'].strftime('%H:%M')} "
+              f"{e['from']}→{e['to']} (+{e['gain_days']}일, ±{e['uncertainty_sec']/60:.0f}분)")
+    if ymd2date(cur) >= tgt:
+        print("   → 벽이 목표일을 넘었다. 목표일 개방 여부를 직접 확인하라.")
+        return
+    inf = infer(ev)
+    need = (tgt - ymd2date(cur)).days
+    print(f"   → 목표까지 벽이 +{need}일 더 밀려야 함")
+    if inf["cadence_days"] and inf["gain_days"]:
+        import math
+        n = math.ceil(need / inf["gain_days"])
+        eta = ev[-1]["after"] + timedelta(days=inf["cadence_days"] * n)
+        print(f"   🎯 관측기반 예상: {eta.strftime('%Y-%m-%d(%a) %H:%M')} "
+              f"({inf['cadence_days']:.2f}일마다 +{inf['gain_days']:.0f}일, 신뢰도 {inf['confidence']})")
+    elif ev:
+        print(f"   ⏳ 벽 이동 {len(ev)}회 관측 — 주기 추정에는 2회 이상 필요")
+    else:
+        print("   ⏳ 벽 이동 관측 0회 — 아직 주기를 알 수 없음")
+        print(f"      벽이 밀리는 순간이 곧 답이다. 정찰을 끊지 말 것.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="예매 오픈 시점 예측")
     ap.add_argument("--movie", default="오디세이")
@@ -306,6 +372,7 @@ def main() -> int:
         print(f"관측 이력 없음: {a.hist}\nscout.py가 먼저 돌아야 합니다.")
         return 1
     report(series, now)
+    wall_report(now, a.date)
     if a.report:
         return 0
     res = predict(series, a.movie, a.site, a.date, now)

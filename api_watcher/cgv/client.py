@@ -81,5 +81,10 @@ class CgvClient:
         return d["data"]["items"][0]["seats"]
 
     def site_list(self) -> list[dict]:
-        """극장 목록(siteNo/siteNm) — 참고/디버그용."""
-        return self._get(CONTENT, "site/searchAllRegionAndSite", {"coCd": CO})["data"]
+        """전국 극장 목록 [{siteNo, siteNm, regnGrpCd}, ...] (178곳).
+
+        응답은 {movInfo, kndInfo, regionInfo, siteInfo, rcmSiteInfo} 구조이며
+        실제 극장 배열은 siteInfo 에 있다.
+        """
+        d = self._get(CONTENT, "site/searchAllRegionAndSite", {"coCd": CO})["data"]
+        return d.get("siteInfo") or []
