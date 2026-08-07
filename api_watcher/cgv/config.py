@@ -44,6 +44,7 @@ class Target:
     screen: str = ""                # 상영관 키워드(비면 전 상영관)
     start: str = ""                 # 시작시 접두(비면 전 시간)
     seat: SeatRange = field(default_factory=SeatRange)
+    min_adjacent: int = 1           # 같은 행 연속 좌석 최소 개수(1=단석도 알림)
     # 타이밍
     poll_sec: float = 1.0           # seat 폴링
     open_poll_sec: float = 30.0     # open 평상시 폴링
@@ -65,6 +66,8 @@ class Target:
             raise ValueError(f"[{self.name}] date 는 YYYYMMDD: {self.date}")
         if not self.movie:
             raise ValueError(f"[{self.name}] movie 필수")
+        if int(self.min_adjacent) < 1:
+            raise ValueError(f"[{self.name}] min_adjacent 는 1 이상: {self.min_adjacent}")
 
 
 @dataclass

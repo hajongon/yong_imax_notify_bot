@@ -25,6 +25,7 @@ targets:
     screen: "IMAX"                 # 상영관 키워드 (생략 시 전 상영관)
     start: "14"                    # 시작시 접두 → 14:00 회차 (생략 가능)
     seat: { row: [D, Z], col: [1, 99] }
+    min_adjacent: 2                # 같은 행 연속(붙은) 좌석 2개 이상일 때만 알림 (생략 시 1=단석도)
 
   # (2) 예매 오픈 감시 — 아직 안 열린 날짜
   # - name: spiderman-0808-imax-open

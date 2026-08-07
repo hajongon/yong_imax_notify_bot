@@ -16,8 +16,8 @@ from datetime import datetime, timedelta
 
 from .client import CgvClient, CgvError
 from .config import Settings, Target, seat_target_from_open
-from .model import (KST, available_seat_names, fmt_hhmm, match_showings,
-                    now_kst_str, parse_show_dt, sort_seats)
+from .model import (KST, available_seat_names, filter_adjacent, fmt_hhmm,
+                    match_showings, now_kst_str, parse_show_dt, sort_seats)
 
 log = logging.getLogger("cgv.watch")
 
@@ -111,6 +111,8 @@ class BaseWatcher(threading.Thread):
             s += f" {t.screen}"
         if t.mode == "seat":
             s += f" · {t.seat.label()}"
+            if t.min_adjacent > 1:
+                s += f" · {t.min_adjacent}연석 이상"
         return s
 
 
@@ -183,7 +185,7 @@ class SeatWatcher(BaseWatcher):
     def _scan(self, free: int, reason: str):
         seats = self.cli.seat_map(self.t.site_no, self.t.date, self.scns_no, self.scn_sseq)
         self.last_full = time.time()
-        current = set(available_seat_names(seats, self.t.seat))
+        current = set(filter_adjacent(available_seat_names(seats, self.t.seat), self.t.min_adjacent))
         new = current - self.known
         if new:
             self._notify_seats(sort_seats(current), sort_seats(new), free)
@@ -217,7 +219,7 @@ class SeatWatcher(BaseWatcher):
         sh = self._find_showing()
         free = int(sh.get("frSeatCnt", "0") or 0)
         seats = self.cli.seat_map(self.t.site_no, self.t.date, sh["scnsNo"], sh["scnSseq"]) if free > 0 else []
-        hits = available_seat_names(seats, self.t.seat)
+        hits = filter_adjacent(available_seat_names(seats, self.t.seat), self.t.min_adjacent)
         return f"[{self.t.name}] seat | 잔여 {free} · 범위내 {len(hits)} {hits}"
 
 

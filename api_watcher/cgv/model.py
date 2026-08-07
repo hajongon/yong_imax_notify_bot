@@ -48,6 +48,32 @@ def available_seat_names(seats: list[dict], rng: SeatRange) -> list[str]:
     return sorted(out, key=lambda x: (x[0], int(x[1:])))
 
 
+def filter_adjacent(names: list[str], min_size: int) -> list[str]:
+    """같은 행에서 좌석번호가 연속(붙은 자리)인 그룹 크기가 min_size 이상인 좌석만 남김.
+
+    min_size <= 1 이면 전체 통과. 통로를 사이에 둔 연속 번호는 구분하지 못함(근사).
+    """
+    if min_size <= 1:
+        return sort_seats(names)
+    by_row: dict[str, list[int]] = {}
+    for n in names:
+        by_row.setdefault(n[0], []).append(int(n[1:]))
+    out: list[str] = []
+    for row, cols in by_row.items():
+        cols.sort()
+        run: list[int] = [cols[0]]
+        for c in cols[1:]:
+            if c == run[-1] + 1:
+                run.append(c)
+            else:
+                if len(run) >= min_size:
+                    out += [f"{row}{k}" for k in run]
+                run = [c]
+        if len(run) >= min_size:
+            out += [f"{row}{k}" for k in run]
+    return sort_seats(out)
+
+
 def sort_seats(names) -> list[str]:
     return sorted(names, key=lambda x: (x[0], int(x[1:])))
 
