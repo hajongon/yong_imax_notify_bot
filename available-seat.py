@@ -33,15 +33,12 @@ except Exception:
     load_dotenv = None
 
 START_URL = "https://cgv.co.kr/tme/itgrSrch"
-SEARCH_KEYWORD = "프로젝트 헤일메리"
+SEARCH_KEYWORD = "오디세이"
 TARGET_THEATER = "용산아이파크몰"
 TARGET_DAY_OF_WEEK = "토"
-TARGET_DAY_NUMBER = "21"
-WATCH_START_TIMES = ["13:20", "16:30"]
-TARGET_ROW_START = "F"
-TARGET_ROW_END = "O"
-TARGET_COL_MIN = 10
-TARGET_COL_MAX = 35
+TARGET_DAY_NUMBER = "22"
+WATCH_START_TIMES = ["14:00"]
+EXCLUDE_ROWS = ("A", "B", "C")
 POLL_INTERVAL_SEC = 1.0
 LOGIN_POPUP_WAIT_SEC = 2
 TELEGRAM_CHAT_ID = -1003872445177
@@ -147,7 +144,7 @@ def click_search_button() -> None:
 
     def search_loaded(drv: webdriver.Chrome) -> bool:
         keyword_found = len(
-            drv.find_elements(By.XPATH, "//*[contains(normalize-space(.),'프로젝트 헤일메리')]")
+            drv.find_elements(By.XPATH, f"//*[contains(normalize-space(.),'{SEARCH_KEYWORD}')]")
         ) > 0
 
         reserve_clickable = len(
@@ -170,7 +167,7 @@ def click_reserve_button() -> None:
     before_url = driver.current_url
 
     preferred_xpath = (
-        "(//*[contains(normalize-space(.), '프로젝트 헤일메리')]"
+        f"(//*[contains(normalize-space(.), '{SEARCH_KEYWORD}')]"
         "/ancestor::*[self::li or self::article or self::section or self::div][1]"
         "//button[contains(@class,'btn') and contains(@class,'btn-md') and contains(@class,'line-main')"
         " and normalize-space()='예매하기'])[1]"
@@ -461,25 +458,15 @@ def _extract_seat_name(seat_button) -> str:
     return ""
 
 
-def _build_target_seat_set() -> set[str]:
-    seats: set[str] = set()
-    for row_ord in range(ord(TARGET_ROW_START), ord(TARGET_ROW_END) + 1):
-        row = chr(row_ord)
-        for col in range(TARGET_COL_MIN, TARGET_COL_MAX + 1):
-            seats.add(f"{row}{col}")
-    return seats
-
-
 def find_available_target_seats() -> list[str]:
     driver, wait = _ctx()
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button[data-seatlocno]")))
-    target_set = _build_target_seat_set()
     found: set[str] = set()
     for btn in driver.find_elements(By.CSS_SELECTOR, "button[data-seatlocno]"):
         if btn.get_attribute("disabled") is not None:
             continue
         seat_name = _extract_seat_name(btn)
-        if seat_name in target_set:
+        if seat_name and seat_name[0] not in EXCLUDE_ROWS:
             found.add(seat_name)
     return sorted(found, key=lambda s: (s[0], int(s[1:])))
 
@@ -678,11 +665,8 @@ def main() -> int:
                         return 0
 
                     logging.info(
-                        "[seat] 후보 좌석 없음 (범위 %s~%s, %d~%d / 시간대 %s)",
-                        TARGET_ROW_START,
-                        TARGET_ROW_END,
-                        TARGET_COL_MIN,
-                        TARGET_COL_MAX,
+                        "[seat] 후보 좌석 없음 (%s열 제외 전체 / 시간대 %s)",
+                        ",".join(EXCLUDE_ROWS),
                         start_time,
                     )
                 time.sleep(POLL_INTERVAL_SEC)

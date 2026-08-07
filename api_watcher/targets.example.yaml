@@ -15,21 +15,23 @@ defaults:
   heartbeat_sec: 3600
 
 targets:
-  # (1) 빈자리 감시 — 이미 열린 회차의 명당 취소표
-  - name: spiderman-0801-imax-seat
+  # (1) 빈자리 감시 — 이미 열린 회차의 취소표
+  #     seat 범위는 [하한, 상한] 폐구간. 앞줄 제외는 row 하한으로 표현
+  #     (예: 맨 앞 세 줄 A·B·C 제외 전체 = row [D, Z], col [1, 99])
+  - name: odyssey-0822-imax-seat
     mode: seat
-    movie: "스파이더맨-브랜드 뉴 데이"
-    date: "20260801"
+    movie: "오디세이"
+    date: "20260822"
     screen: "IMAX"                 # 상영관 키워드 (생략 시 전 상영관)
-    start: "16"                    # 시작시 접두 (생략 가능)
-    seat: { row: [F, O], col: [10, 35] }
+    start: "14"                    # 시작시 접두 → 14:00 회차 (생략 가능)
+    seat: { row: [D, Z], col: [1, 99] }
 
   # (2) 예매 오픈 감시 — 아직 안 열린 날짜
-  - name: spiderman-0808-imax-open
-    mode: open
-    movie: "스파이더맨-브랜드 뉴 데이"
-    date: "20260808"
-    screen: "IMAX"                 # "IMAX관이 열리면" (생략 시 그 날짜 아무거나 열리면)
-    # expected_open: "20260802 20:00"   # 공지된 오픈 시각 알면 지정 → 그 근처 1초 가속
-    on_open: seat                  # 오픈되면 자동으로 좌석 감시로 승계
-    seat: { row: [F, O], col: [10, 35] }
+  # - name: spiderman-0808-imax-open
+  #   mode: open
+  #   movie: "스파이더맨-브랜드 뉴 데이"
+  #   date: "20260808"
+  #   screen: "IMAX"               # "IMAX관이 열리면" (생략 시 그 날짜 아무거나 열리면)
+  #   # expected_open: "20260802 20:00"   # 공지된 오픈 시각 알면 지정 → 그 근처 1초 가속
+  #   on_open: seat                # 오픈되면 자동으로 좌석 감시로 승계
+  #   seat: { row: [F, O], col: [10, 35] }
